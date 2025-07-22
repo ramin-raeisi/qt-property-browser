@@ -2810,6 +2810,181 @@ void QtFloatSpinBoxFactory::disconnectPropertyManager(QtFloatPropertyManager *ma
     disconnect(manager, &QtFloatPropertyManager::decimalsChanged, this, nullptr);
 }
 
+// QtUnsignedIntSpinBoxFactory
+
+class QtUnsignedIntSpinBoxFactoryPrivate : public EditorFactoryPrivate<QSpinBox>
+{
+    QtUnsignedIntSpinBoxFactory *q_ptr = nullptr;
+    Q_DECLARE_PUBLIC(QtUnsignedIntSpinBoxFactory)
+public:
+    void slotPropertyChanged(QtProperty *property, unsigned int value);
+    void slotRangeChanged(QtProperty *property, unsigned int min, unsigned int max);
+    void slotSingleStepChanged(QtProperty *property, unsigned int step);
+    void slotSetValue(int value);
+};
+
+void QtUnsignedIntSpinBoxFactoryPrivate::slotPropertyChanged(QtProperty *property,
+                                                             unsigned int value)
+{
+    const auto it = m_createdEditors.constFind(property);
+    if (it == m_createdEditors.cend())
+        return;
+    for (QSpinBox *editor : it.value()) {
+        if (static_cast<unsigned int>(editor->value()) != value) {
+            editor->blockSignals(true);
+            editor->setValue(static_cast<int>(value));
+            editor->blockSignals(false);
+        }
+    }
+}
+
+void QtUnsignedIntSpinBoxFactoryPrivate::slotRangeChanged(QtProperty *property,
+                                                          unsigned int min,
+                                                          unsigned int max)
+{
+    const auto it = m_createdEditors.constFind(property);
+    if (it == m_createdEditors.cend())
+        return;
+
+    QtUnsignedIntPropertyManager *manager = q_ptr->propertyManager(property);
+    if (!manager)
+        return;
+
+    for (QSpinBox *editor : it.value()) {
+        editor->blockSignals(true);
+        editor->setRange(static_cast<int>(min),
+                         static_cast<int>(qMin(max, static_cast<unsigned int>(INT_MAX))));
+        editor->setValue(static_cast<int>(manager->value(property)));
+        editor->blockSignals(false);
+    }
+}
+
+void QtUnsignedIntSpinBoxFactoryPrivate::slotSingleStepChanged(QtProperty *property,
+                                                               unsigned int step)
+{
+    const auto it = m_createdEditors.constFind(property);
+    if (it == m_createdEditors.cend())
+        return;
+    for (QSpinBox *editor : it.value()) {
+        editor->blockSignals(true);
+        editor->setSingleStep(static_cast<int>(qMin(step, static_cast<unsigned int>(INT_MAX))));
+        editor->blockSignals(false);
+    }
+}
+
+void QtUnsignedIntSpinBoxFactoryPrivate::slotSetValue(int value)
+{
+    QObject *object = q_ptr->sender();
+    for (auto itEditor = m_editorToProperty.cbegin(), ecend = m_editorToProperty.cend();
+         itEditor != ecend;
+         ++itEditor) {
+        if (itEditor.key() == object) {
+            QtProperty *property = itEditor.value();
+            QtUnsignedIntPropertyManager *manager = q_ptr->propertyManager(property);
+            if (!manager)
+                return;
+            manager->setValue(property, static_cast<unsigned int>(qMax(0, value)));
+            return;
+        }
+    }
+}
+
+/*!
+    \class QtUnsignedIntSpinBoxFactory
+    \internal
+    \inmodule QtDesigner
+    \since 4.4
+
+    \brief The QtUnsignedIntSpinBoxFactory class provides QSpinBox widgets for
+    properties created by QtUnsignedIntPropertyManager objects.
+
+    \sa QtAbstractEditorFactory, QtUnsignedIntPropertyManager
+*/
+
+/*!
+    Creates a factory with the given \a parent.
+*/
+QtUnsignedIntSpinBoxFactory::QtUnsignedIntSpinBoxFactory(QObject *parent)
+    : QtAbstractEditorFactory<QtUnsignedIntPropertyManager>(parent)
+    , d_ptr(new QtUnsignedIntSpinBoxFactoryPrivate())
+{
+    d_ptr->q_ptr = this;
+}
+
+/*!
+    Destroys this factory, and all the widgets it has created.
+*/
+QtUnsignedIntSpinBoxFactory::~QtUnsignedIntSpinBoxFactory()
+{
+    qDeleteAll(d_ptr->m_editorToProperty.keys());
+}
+
+/*!
+    \internal
+
+    Reimplemented from the QtAbstractEditorFactory class.
+*/
+void QtUnsignedIntSpinBoxFactory::connectPropertyManager(QtUnsignedIntPropertyManager *manager)
+{
+    connect(manager,
+            &QtUnsignedIntPropertyManager::valueChanged,
+            this,
+            [this](QtProperty *property, unsigned int value) {
+                d_ptr->slotPropertyChanged(property, value);
+            });
+    connect(manager,
+            &QtUnsignedIntPropertyManager::rangeChanged,
+            this,
+            [this](QtProperty *property, unsigned int min, unsigned int max) {
+                d_ptr->slotRangeChanged(property, min, max);
+            });
+    connect(manager,
+            &QtUnsignedIntPropertyManager::singleStepChanged,
+            this,
+            [this](QtProperty *property, unsigned int value) {
+                d_ptr->slotSingleStepChanged(property, value);
+            });
+}
+
+/*!
+    \internal
+
+    Reimplemented from the QtAbstractEditorFactory class.
+*/
+QWidget *QtUnsignedIntSpinBoxFactory::createEditor(QtUnsignedIntPropertyManager *manager,
+                                                   QtProperty *property,
+                                                   QWidget *parent)
+{
+    QSpinBox *editor = d_ptr->createEditor(property, parent);
+    editor->setSingleStep(
+        static_cast<int>(qMin(manager->singleStep(property), static_cast<unsigned int>(INT_MAX))));
+    editor->setRange(static_cast<int>(manager->minimum(property)),
+                     static_cast<int>(
+                         qMin(manager->maximum(property), static_cast<unsigned int>(INT_MAX))));
+    editor->setValue(static_cast<int>(manager->value(property)));
+    editor->setKeyboardTracking(false);
+
+    connect(editor, &QSpinBox::valueChanged, this, [this](int value) {
+        d_ptr->slotSetValue(value);
+    });
+    connect(editor, &QObject::destroyed, this, [this](QObject *object) {
+        d_ptr->slotEditorDestroyed(object);
+    });
+    return editor;
+}
+
+/*!
+    \internal
+
+    Reimplemented from the QtAbstractEditorFactory class.
+*/
+void QtUnsignedIntSpinBoxFactory::disconnectPropertyManager(QtUnsignedIntPropertyManager *manager)
+{
+    disconnect(manager, &QtUnsignedIntPropertyManager::valueChanged, this, nullptr);
+    disconnect(manager, &QtUnsignedIntPropertyManager::rangeChanged, this, nullptr);
+    disconnect(manager, &QtUnsignedIntPropertyManager::singleStepChanged, this, nullptr);
+}
+
 QT_END_NAMESPACE
 
 #include "moc_qteditorfactory_p.cpp"

@@ -387,6 +387,29 @@ private:
     Q_DISABLE_COPY_MOVE(QtFloatSpinBoxFactory)
 };
 
+class QtUnsignedIntSpinBoxFactoryPrivate;
+
+class QTPROPERTYBROWSER_API QtUnsignedIntSpinBoxFactory
+    : public QtAbstractEditorFactory<QtUnsignedIntPropertyManager>
+{
+    Q_OBJECT
+public:
+    QtUnsignedIntSpinBoxFactory(QObject *parent = nullptr);
+    ~QtUnsignedIntSpinBoxFactory() override;
+
+protected:
+    void connectPropertyManager(QtUnsignedIntPropertyManager *manager) override;
+    QWidget *createEditor(QtUnsignedIntPropertyManager *manager,
+                          QtProperty *property,
+                          QWidget *parent) override;
+    void disconnectPropertyManager(QtUnsignedIntPropertyManager *manager) override;
+
+private:
+    QScopedPointer<QtUnsignedIntSpinBoxFactoryPrivate> d_ptr;
+    Q_DECLARE_PRIVATE(QtUnsignedIntSpinBoxFactory)
+    Q_DISABLE_COPY_MOVE(QtUnsignedIntSpinBoxFactory)
+};
+
 QT_END_NAMESPACE
 
 #endif

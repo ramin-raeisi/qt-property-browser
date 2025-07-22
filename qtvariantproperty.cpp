@@ -295,6 +295,9 @@ public:
     void slotValueChanged(QtProperty *property, float val);
     void slotRangeChanged(QtProperty *property, float min, float max);
     void slotSingleStepChanged(QtProperty *property, float step);
+    void slotValueChanged(QtProperty *property, unsigned int value);
+    void slotRangeChanged(QtProperty *property, unsigned int min, unsigned int max);
+    void slotSingleStepChanged(QtProperty *property, unsigned int step);
 
     void valueChanged(QtProperty *property, const QVariant &val);
 
@@ -350,6 +353,8 @@ int QtVariantPropertyManagerPrivate::internalPropertyToType(QtProperty *property
         type = QMetaType::Double;
     else if (qobject_cast<QtFloatPropertyManager *>(internPropertyManager))
         type = QMetaType::Float;
+    else if (qobject_cast<QtUnsignedIntPropertyManager *>(internPropertyManager))
+        type = QMetaType::UInt;
     return type;
 }
 
@@ -1523,6 +1528,35 @@ QtVariantPropertyManager::QtVariantPropertyManager(QObject *parent)
             [this](QtProperty *property, int value) {
                 d_ptr->slotDecimalsChanged(property, value);
             });
+
+    // UnsignedIntPropertyManager
+    auto *unsignedIntPropertyManager = new QtUnsignedIntPropertyManager(this);
+    d_ptr->m_typeToPropertyManager[QMetaType::UInt] = unsignedIntPropertyManager;
+    d_ptr->m_typeToAttributeToAttributeType[QMetaType::UInt][d_ptr->m_minimumAttribute]
+        = QMetaType::UInt;
+    d_ptr->m_typeToAttributeToAttributeType[QMetaType::UInt][d_ptr->m_maximumAttribute]
+        = QMetaType::UInt;
+    d_ptr->m_typeToAttributeToAttributeType[QMetaType::UInt][d_ptr->m_singleStepAttribute]
+        = QMetaType::UInt;
+    d_ptr->m_typeToValueType[QMetaType::UInt] = QMetaType::UInt;
+    connect(unsignedIntPropertyManager,
+            &QtUnsignedIntPropertyManager::valueChanged,
+            this,
+            [this](QtProperty *property, unsigned int value) {
+                d_ptr->slotValueChanged(property, value);
+            });
+    connect(unsignedIntPropertyManager,
+            &QtUnsignedIntPropertyManager::rangeChanged,
+            this,
+            [this](QtProperty *property, unsigned int min, unsigned int max) {
+                d_ptr->slotRangeChanged(property, min, max);
+            });
+    connect(unsignedIntPropertyManager,
+            &QtUnsignedIntPropertyManager::singleStepChanged,
+            this,
+            [this](QtProperty *property, unsigned int value) {
+                d_ptr->slotSingleStepChanged(property, value);
+            });
 }
 
 /*!
@@ -1656,6 +1690,8 @@ QVariant QtVariantPropertyManager::value(const QtProperty *property) const
         return flagManager->value(internProp);
     } else if (auto *floatManager = qobject_cast<QtFloatPropertyManager *>(manager)) {
         return floatManager->value(internProp);
+    } else if (auto *unsignedIntManager = qobject_cast<QtUnsignedIntPropertyManager *>(manager)) {
+        return unsignedIntManager->value(internProp);
     }
     return {};
 }
@@ -1804,6 +1840,14 @@ QVariant QtVariantPropertyManager::attributeValue(const QtProperty *property,
         if (attribute == d_ptr->m_decimalsAttribute)
             return floatManager->decimals(internProp);
         return {};
+    } else if (auto *unsignedIntManager = qobject_cast<QtUnsignedIntPropertyManager *>(manager)) {
+        if (attribute == d_ptr->m_maximumAttribute)
+            return unsignedIntManager->maximum(internProp);
+        if (attribute == d_ptr->m_minimumAttribute)
+            return unsignedIntManager->minimum(internProp);
+        if (attribute == d_ptr->m_singleStepAttribute)
+            return unsignedIntManager->singleStep(internProp);
+        return {};
     }
 }
 
@@ -1943,6 +1987,9 @@ void QtVariantPropertyManager::setValue(QtProperty *property, const QVariant &va
     } else if (auto *floatManager = qobject_cast<QtFloatPropertyManager *>(manager)) {
         floatManager->setValue(internProp, qvariant_cast<float>(val));
         return;
+    } else if (auto *unsignedIntManager = qobject_cast<QtUnsignedIntPropertyManager *>(manager)) {
+        unsignedIntManager->setValue(internProp, qvariant_cast<unsigned int>(val));
+        return;
     }
 }
 
@@ -2053,6 +2100,14 @@ void QtVariantPropertyManager::setAttribute(QtProperty *property,
             floatManager->setSingleStep(internProp, qvariant_cast<float>(value));
         if (attribute == d_ptr->m_decimalsAttribute)
             floatManager->setDecimals(internProp, qvariant_cast<int>(value));
+        return;
+    } else if (auto *unsignedIntManager = qobject_cast<QtUnsignedIntPropertyManager *>(manager)) {
+        if (attribute == d_ptr->m_maximumAttribute)
+            unsignedIntManager->setMaximum(internProp, qvariant_cast<unsigned int>(value));
+        else if (attribute == d_ptr->m_minimumAttribute)
+            unsignedIntManager->setMinimum(internProp, qvariant_cast<unsigned int>(value));
+        else if (attribute == d_ptr->m_singleStepAttribute)
+            unsignedIntManager->setSingleStep(internProp, qvariant_cast<unsigned int>(value));
         return;
     }
 }
@@ -2172,6 +2227,7 @@ public:
     QtColorEditorFactory *m_colorEditorFactory;
     QtFontEditorFactory *m_fontEditorFactory;
     QtFloatSpinBoxFactory *m_floatSpinBoxFactory;
+    QtUnsignedIntSpinBoxFactory *m_unsignedIntSpinBoxFactory;
 
     QHash<QtAbstractEditorFactoryBase *, int> m_factoryToType;
     QMap<int, QtAbstractEditorFactoryBase *> m_typeToFactory;
@@ -2302,6 +2358,10 @@ QtVariantEditorFactory::QtVariantEditorFactory(QObject *parent)
     d_ptr->m_floatSpinBoxFactory = new QtFloatSpinBoxFactory(this);
     d_ptr->m_factoryToType[d_ptr->m_floatSpinBoxFactory] = QMetaType::Float;
     d_ptr->m_typeToFactory[QMetaType::Float] = d_ptr->m_floatSpinBoxFactory;
+
+    d_ptr->m_unsignedIntSpinBoxFactory = new QtUnsignedIntSpinBoxFactory(this);
+    d_ptr->m_factoryToType[d_ptr->m_unsignedIntSpinBoxFactory] = QMetaType::UInt;
+    d_ptr->m_typeToFactory[QMetaType::UInt] = d_ptr->m_unsignedIntSpinBoxFactory;
 }
 
 /*!
@@ -2415,6 +2475,10 @@ void QtVariantEditorFactory::connectPropertyManager(QtVariantPropertyManager *ma
     const auto floatPropertyManagers = manager->findChildren<QtFloatPropertyManager *>();
     for (QtFloatPropertyManager *manager : floatPropertyManagers)
         d_ptr->m_floatSpinBoxFactory->addPropertyManager(manager);
+
+    const auto unsignedIntPropertyManagers = manager->findChildren<QtUnsignedIntPropertyManager *>();
+    for (QtUnsignedIntPropertyManager *manager : unsignedIntPropertyManagers)
+        d_ptr->m_unsignedIntSpinBoxFactory->addPropertyManager(manager);
 }
 
 /*!
@@ -2539,6 +2603,10 @@ void QtVariantEditorFactory::disconnectPropertyManager(QtVariantPropertyManager 
     const auto floatPropertyManagers = manager->findChildren<QtFloatPropertyManager *>();
     for (QtFloatPropertyManager *manager : floatPropertyManagers)
         d_ptr->m_floatSpinBoxFactory->removePropertyManager(manager);
+
+    const auto unsignedIntPropertyManagers = manager->findChildren<QtUnsignedIntPropertyManager *>();
+    for (QtUnsignedIntPropertyManager *manager : unsignedIntPropertyManagers)
+        d_ptr->m_unsignedIntSpinBoxFactory->removePropertyManager(manager);
 }
 
 void QtVariantPropertyManagerPrivate::slotValueChanged(QtProperty *property, float val)
@@ -2555,6 +2623,27 @@ void QtVariantPropertyManagerPrivate::slotRangeChanged(QtProperty *property, flo
 }
 
 void QtVariantPropertyManagerPrivate::slotSingleStepChanged(QtProperty *property, float step)
+{
+    if (QtVariantProperty *varProp = m_internalToProperty.value(property, nullptr))
+        emit q_ptr->attributeChanged(varProp, m_singleStepAttribute, QVariant(step));
+}
+
+void QtVariantPropertyManagerPrivate::slotValueChanged(QtProperty *property, unsigned int value)
+{
+    valueChanged(property, QVariant(value));
+}
+
+void QtVariantPropertyManagerPrivate::slotRangeChanged(QtProperty *property,
+                                                       unsigned int min,
+                                                       unsigned int max)
+{
+    if (QtVariantProperty *varProp = m_internalToProperty.value(property, nullptr)) {
+        emit q_ptr->attributeChanged(varProp, m_minimumAttribute, QVariant(min));
+        emit q_ptr->attributeChanged(varProp, m_maximumAttribute, QVariant(max));
+    }
+}
+
+void QtVariantPropertyManagerPrivate::slotSingleStepChanged(QtProperty *property, unsigned int step)
 {
     if (QtVariantProperty *varProp = m_internalToProperty.value(property, nullptr))
         emit q_ptr->attributeChanged(varProp, m_singleStepAttribute, QVariant(step));
