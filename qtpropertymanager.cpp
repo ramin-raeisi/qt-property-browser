@@ -6393,6 +6393,336 @@ void QtCursorPropertyManager::uninitializeProperty(QtProperty *property)
     d_ptr->m_values.remove(property);
 }
 
+
+// QtFloatPropertyManager
+
+class QtFloatPropertyManagerPrivate
+{
+    QtFloatPropertyManager *q_ptr = nullptr;
+    Q_DECLARE_PUBLIC(QtFloatPropertyManager)
+public:
+
+    struct Data
+    {
+        float val{0};
+        float minVal{-FLT_MAX};
+        float maxVal{FLT_MAX};
+        float singleStep{1};
+        int decimals{2};
+        float minimumValue() const { return minVal; }
+        float maximumValue() const { return maxVal; }
+        void setMinimumValue(float newMinVal) { setSimpleMinimumData(this, newMinVal); }
+        void setMaximumValue(float newMaxVal) { setSimpleMaximumData(this, newMaxVal); }
+    };
+
+    QHash<const QtProperty *, Data> m_values;
+};
+
+/*!
+    \class QtFloatPropertyManager
+    \internal
+    \inmodule QtDesigner
+    \since 4.4
+
+    \brief The QtFloatPropertyManager provides and manages float properties.
+
+    A float property has a current value, and a range specifying the
+    valid values. The range is defined by a minimum and a maximum
+    value.
+
+    The property's value and range can be retrieved using the value(),
+    minimum() and maximum() functions, and can be set using the
+    setValue(), setMinimum() and setMaximum() slots.
+    Alternatively, the range can be defined in one go using the
+    setRange() slot.
+
+    In addition, QtFloatPropertyManager provides the valueChanged() signal
+    which is emitted whenever a property created by this manager
+    changes, and the rangeChanged() signal which is emitted whenever
+    such a property changes its range of valid values.
+
+    \sa QtAbstractPropertyManager, QtFloatSpinBoxFactory
+*/
+
+/*!
+    \fn void QtFloatPropertyManager::valueChanged(QtProperty *property, float value)
+
+    This signal is emitted whenever a property created by this manager
+    changes its value, passing a pointer to the \a property and the new
+    \a value as parameters.
+
+    \sa setValue()
+*/
+
+/*!
+    \fn void QtFloatPropertyManager::rangeChanged(QtProperty *property, float minimum, float maximum)
+
+    This signal is emitted whenever a property created by this manager
+    changes its range of valid values, passing a pointer to the
+    \a property and the new \a minimum and \a maximum values
+
+    \sa setRange()
+*/
+
+/*!
+    \fn void QtFloatPropertyManager::decimalsChanged(QtProperty *property, int prec)
+
+    This signal is emitted whenever a property created by this manager
+    changes its precision of value, passing a pointer to the
+    \a property and the new \a prec value
+
+    \sa setDecimals()
+*/
+
+/*!
+    \fn void QtFloatPropertyManager::singleStepChanged(QtProperty *property, float step)
+
+    This signal is emitted whenever a property created by this manager
+    changes its single step property, passing a pointer to the
+    \a property and the new \a step value
+
+    \sa setSingleStep()
+*/
+
+/*!
+    Creates a manager with the given \a parent.
+*/
+QtFloatPropertyManager::QtFloatPropertyManager(QObject *parent)
+    : QtAbstractPropertyManager(parent), d_ptr(new QtFloatPropertyManagerPrivate)
+{
+    d_ptr->q_ptr = this;
+}
+
+/*!
+    Destroys this manager, and all the properties it has created.
+*/
+QtFloatPropertyManager::~QtFloatPropertyManager()
+{
+    clear();
+}
+
+/*!
+    Returns the given \a property's value.
+
+    If the given property is not managed by this manager, this
+    function returns 0.
+
+    \sa setValue()
+*/
+float QtFloatPropertyManager::value(const QtProperty *property) const
+{
+    return getValue<float>(d_ptr->m_values, property, 0.0f);
+}
+
+/*!
+    Returns the given \a property's minimum value.
+
+    \sa maximum(), setRange()
+*/
+float QtFloatPropertyManager::minimum(const QtProperty *property) const
+{
+    return getMinimum<float>(d_ptr->m_values, property, 0.0f);
+}
+
+/*!
+    Returns the given \a property's maximum value.
+
+    \sa minimum(), setRange()
+*/
+float QtFloatPropertyManager::maximum(const QtProperty *property) const
+{
+    return getMaximum<float>(d_ptr->m_values, property, 0.0f);
+}
+
+/*!
+    Returns the given \a property's step value.
+
+    The step is typically used to increment or decrement a property value while pressing an arrow key.
+
+    \sa setSingleStep()
+*/
+float QtFloatPropertyManager::singleStep(const QtProperty *property) const
+{
+    return getData<float>(d_ptr->m_values, &QtFloatPropertyManagerPrivate::Data::singleStep, property, 0);
+}
+
+/*!
+    Returns the given \a property's precision, in decimals.
+
+    \sa setDecimals()
+*/
+int QtFloatPropertyManager::decimals(const QtProperty *property) const
+{
+    return getData<int>(d_ptr->m_values, &QtFloatPropertyManagerPrivate::Data::decimals, property, 0);
+}
+
+/*!
+    \reimp
+*/
+QString QtFloatPropertyManager::valueText(const QtProperty *property) const
+{
+    const auto it = d_ptr->m_values.constFind(property);
+    if (it == d_ptr->m_values.constEnd())
+        return {};
+    return QString::number(it.value().val, 'f', it.value().decimals);
+}
+
+/*!
+    \fn void QtFloatPropertyManager::setValue(QtProperty *property, float value)
+
+    Sets the value of the given \a property to \a value.
+
+    If the specified \a value is not valid according to the given
+    \a property's range, the \a value is adjusted to the nearest valid value
+    within the range.
+
+    \sa value(), setRange(), valueChanged()
+*/
+void QtFloatPropertyManager::setValue(QtProperty *property, float val)
+{
+    void (QtFloatPropertyManagerPrivate::*setSubPropertyValue)(QtProperty *, float) = nullptr;
+    setValueInRange<float, QtFloatPropertyManagerPrivate, QtFloatPropertyManager, float>(this, d_ptr.data(),
+                &QtFloatPropertyManager::propertyChanged,
+                &QtFloatPropertyManager::valueChanged,
+                property, val, setSubPropertyValue);
+}
+
+/*!
+    Sets the step value for the given \a property to \a step.
+
+    The step is typically used to increment or decrement a property value while pressing an arrow key.
+
+    \sa singleStep()
+*/
+void QtFloatPropertyManager::setSingleStep(QtProperty *property, float step)
+{
+    const auto it = d_ptr->m_values.find(property);
+    if (it == d_ptr->m_values.end())
+        return;
+
+    QtFloatPropertyManagerPrivate::Data data = it.value();
+
+    if (step < 0)
+        step = 0;
+
+    if (data.singleStep == step)
+        return;
+
+    data.singleStep = step;
+
+    it.value() = data;
+
+    emit singleStepChanged(property, data.singleStep);
+}
+
+/*!
+    \fn void QtFloatPropertyManager::setDecimals(QtProperty *property, int prec)
+
+    Sets the precision of the given \a property to \a prec.
+
+    The valid decimal range is 0-13. The default is 2.
+
+    \sa decimals()
+*/
+void QtFloatPropertyManager::setDecimals(QtProperty *property, int prec)
+{
+    const auto it = d_ptr->m_values.find(property);
+    if (it == d_ptr->m_values.end())
+        return;
+
+    QtFloatPropertyManagerPrivate::Data data = it.value();
+
+    if (prec > 13)
+        prec = 13;
+    else if (prec < 0)
+        prec = 0;
+
+    if (data.decimals == prec)
+        return;
+
+    data.decimals = prec;
+
+    it.value() = data;
+
+    emit decimalsChanged(property, data.decimals);
+}
+
+/*!
+    Sets the minimum value for the given \a property to \a minVal.
+
+    When setting the minimum value, the maximum and current values are
+    adjusted if necessary (ensuring that the range remains valid and
+    that the current value is within in the range).
+
+    \sa minimum(), setRange(), rangeChanged()
+*/
+void QtFloatPropertyManager::setMinimum(QtProperty *property, float minVal)
+{
+    setMinimumValue<float, QtFloatPropertyManagerPrivate, QtFloatPropertyManager, float, QtFloatPropertyManagerPrivate::Data>(this, d_ptr.data(),
+                &QtFloatPropertyManager::propertyChanged,
+                &QtFloatPropertyManager::valueChanged,
+                &QtFloatPropertyManager::rangeChanged,
+                property, minVal);
+}
+
+/*!
+    Sets the maximum value for the given \a property to \a maxVal.
+
+    When setting the maximum value, the minimum and current values are
+    adjusted if necessary (ensuring that the range remains valid and
+    that the current value is within in the range).
+
+    \sa maximum(), setRange(), rangeChanged()
+*/
+void QtFloatPropertyManager::setMaximum(QtProperty *property, float maxVal)
+{
+    setMaximumValue<float, QtFloatPropertyManagerPrivate, QtFloatPropertyManager, float, QtFloatPropertyManagerPrivate::Data>(this, d_ptr.data(),
+                &QtFloatPropertyManager::propertyChanged,
+                &QtFloatPropertyManager::valueChanged,
+                &QtFloatPropertyManager::rangeChanged,
+                property, maxVal);
+}
+
+/*!
+    \fn void QtFloatPropertyManager::setRange(QtProperty *property, float minimum, float maximum)
+
+    Sets the range of valid values.
+
+    This is a convenience function defining the range of valid values
+    in one go; setting the \a minimum and \a maximum values for the
+    given \a property with a single function call.
+
+    When setting a new range, the current value is adjusted if
+    necessary (ensuring that the value remains within range).
+
+    \sa setMinimum(), setMaximum(), rangeChanged()
+*/
+void QtFloatPropertyManager::setRange(QtProperty *property, float minVal, float maxVal)
+{
+    void (QtFloatPropertyManagerPrivate::*setSubPropertyRange)(QtProperty *, float, float, float) = nullptr;
+    setBorderValues<float, QtFloatPropertyManagerPrivate, QtFloatPropertyManager, float>(this, d_ptr.data(),
+                &QtFloatPropertyManager::propertyChanged,
+                &QtFloatPropertyManager::valueChanged,
+                &QtFloatPropertyManager::rangeChanged,
+                property, minVal, maxVal, setSubPropertyRange);
+}
+
+/*!
+    \reimp
+*/
+void QtFloatPropertyManager::initializeProperty(QtProperty *property)
+{
+    d_ptr->m_values[property] = QtFloatPropertyManagerPrivate::Data();
+}
+
+/*!
+    \reimp
+*/
+void QtFloatPropertyManager::uninitializeProperty(QtProperty *property)
+{
+    d_ptr->m_values.remove(property);
+}
+
 QT_END_NAMESPACE
 
 #include "moc_qtpropertymanager_p.cpp"

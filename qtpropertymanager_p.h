@@ -688,6 +688,44 @@ private:
     Q_DISABLE_COPY_MOVE(QtCursorPropertyManager)
 };
 
+
+class QtFloatPropertyManagerPrivate;
+
+class QTPROPERTYBROWSER_API QtFloatPropertyManager : public QtAbstractPropertyManager
+{
+    Q_OBJECT
+public:
+    QtFloatPropertyManager(QObject *parent = nullptr);
+    ~QtFloatPropertyManager() override;
+
+    float value(const QtProperty *property) const;
+    float minimum(const QtProperty *property) const;
+    float maximum(const QtProperty *property) const;
+    float singleStep(const QtProperty *property) const;
+    int decimals(const QtProperty *property) const;
+
+public Q_SLOTS:
+    void setValue(QtProperty *property, float val);
+    void setMinimum(QtProperty *property, float minVal);
+    void setMaximum(QtProperty *property, float maxVal);
+    void setRange(QtProperty *property, float minVal, float maxVal);
+    void setSingleStep(QtProperty *property, float step);
+    void setDecimals(QtProperty *property, int prec);
+Q_SIGNALS:
+    void valueChanged(QtProperty *property, float val);
+    void rangeChanged(QtProperty *property, float minVal, float maxVal);
+    void singleStepChanged(QtProperty *property, float step);
+    void decimalsChanged(QtProperty *property, int prec);
+protected:
+    QString valueText(const QtProperty *property) const override;
+    void initializeProperty(QtProperty *property) override;
+    void uninitializeProperty(QtProperty *property) override;
+private:
+    QScopedPointer<QtFloatPropertyManagerPrivate> d_ptr;
+    Q_DECLARE_PRIVATE(QtFloatPropertyManager)
+    Q_DISABLE_COPY_MOVE(QtFloatPropertyManager)
+};
+
 QT_END_NAMESPACE
 
 #endif
